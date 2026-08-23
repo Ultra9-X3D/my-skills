@@ -1,0 +1,6 @@
+.claude/
+.ref/
+dist/
+.ai_docs/
+private/
+.DS_Store
