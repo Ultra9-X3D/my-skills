@@ -15,7 +15,7 @@
 
 | 关注点 | 位置 | 结论 |
 | --- | --- | --- |
-| … | `path/to/file.ts:NN` | … |
+| … | `path/to/file.ts` | … |
 
 ## 3. 总体设计
 
@@ -34,56 +34,41 @@
 - **范围**：…
 - **不做**：…（留给阶段 N）
 - **commits**：
-  - `type(scope): subject` — …
-  - `type(scope): subject` — …
+  - `s1-c1` `type(scope): subject` — 允许路径：… — …
+  - `s1-c2` `type(scope): subject` — 允许路径：… — …
 - **完成判据**：
   ```bash
   <可直接执行的命令>
   ```
+- **审查**：1 轮 arch+bug → abs；（中/大）drift；越界核实
 
 ### 阶段 2 — <名字>
 
-（同上）
+（同上；小/中档只有阶段 1）
 
 ## 5. 执行方式
 
 | 项 | 值 |
 | --- | --- |
+| 档 | 小 / 中 / 大 |
+| 在场 | attended / unattended |
+| 产物根 | `.ai_docs/<slug>/` |
 | worktree | `<WORKTREE_ROOT>/<name>` |
 | base | 最新 `origin/main` |
 | 分支 | `<branch>` |
-| 开发阶段 | N 个，每个一个 workflow，各 1 轮 |
-| review | 1 个 workflow，内含 2 轮（找 → 复核 → 修 → 门禁）|
-| 模型 / effort | `opus` / `xhigh`（全部 agent）|
-| 单 agent 预算 | 300k context |
-| 交付 | 单个 PR |
-| 验收 | agent-browser 端到端走查 + UI/UX 修复 |
+| `workflow_base_sha` | `<boot 时 HEAD>` |
+| 开发阶段 | 按 SKILL.md 分档表 |
+| 模型 / effort | 按 SKILL.md 参数表 |
+| 交付 | 单个 PR；开 PR 前走读；报告链接不进 PR |
 
-所有阶段在同一 worktree、同一分支上累积提交。agent 不建分支、不 push、不开 PR。
+所有阶段在同一 worktree、同一分支上累积提交。实现 agent 不建分支、不 push、不开 PR。一笔一个 commit，串行，`expected_base_sha` 链到上一笔 HEAD。
 
 ## 6. Agent Briefing（每个 agent prompt 必须内联此段原文）
 
+从 `oh-my-workflow/references/04-agent-briefing.md` 把 BRIEFING 原文整段粘贴到下面。不要改写。
+
 ```
-【项目阶段】
-我们现在处于内部开发阶段，没有真实用户，没有需要保护的线上数据，没有向后兼容负担。
-
-【这意味着什么】
-任何不是最佳实践的代码实现和架构设计，都会在后面造成巨大影响。所以：
-
-- 不要为了兼容现有设计而妥协。现有代码写得不对就改它，不要在它旁边加一层适配。
-- 尽可能往最佳实践靠齐。命名、分层、依赖方向、错误处理、类型精度，都按你认为对的做。
-- 允许抽出公共部分、允许重构、允许删除。发现重复实现就合并，发现死代码就删掉。
-- 但不要过度设计。不要为了假想的扩展点加抽象层，不要为了"以后可能要换实现"加接口。
-- 不要提前过度防御。不要给不可能发生的输入加校验，不要为极端 corner case 加分支。
-  过多的防御性代码和 corner case 处理，反倒是后续架构优化的负担 —— 它让人不敢改。
-
-【判断标准】
-问自己：如果这段代码的作者三个月后要重构它，我现在写的东西是帮他还是拖累他？
-帮他的：清晰的分层、准确的类型、去掉的重复。
-拖累他的：多余的抽象、防御性分支、为兼容旧写法留的双路径。
-
-【风格】
-读周边代码再写代码。注释密度、命名习惯、惯用法都跟着现有代码走，不要引入新的库或新的模式除非确有必要。
+<粘贴 BRIEFING>
 ```
 
 ## 7. 整体完成判据
@@ -95,7 +80,10 @@
 agent-browser 走查路径：
 - …
 
+走读与 PR 正文：见 `oh-my-workflow/references/07-e2e-and-pr.md`。
+
 ## 8. 风险与假设
 
 - **假设**：…
 - **风险**：… → 应对：…
+- **follow-ups**：…

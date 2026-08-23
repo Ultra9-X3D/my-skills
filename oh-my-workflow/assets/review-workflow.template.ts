@@ -1,43 +1,40 @@
 export const meta = {
-  name: 'review-2-rounds',
-  description: '对全量 diff 做两轮 review：找 → 对抗复核 → 修 → 门禁',
+  name: 'review-<stage-or-final>',
+  description: '只读审查 → 吸收清单 → 实现 agent 按清单修 → 门禁',
   phases: [
     {title: 'Round 1 · Dimensions', detail: '读 diff，定本轮维度', model: 'opus'},
     {title: 'Round 1 · Find', detail: '每维度一个 agent 并行找问题', model: 'opus'},
     {title: 'Round 1 · Verify', detail: '对抗式复核，宁缺勿滥', model: 'opus'},
-    {title: 'Round 1 · Fix', detail: '按严重度修 + 门禁', model: 'opus'},
+    {title: 'Round 1 · Absorb', detail: '采纳 / 搁置两列', model: 'opus'},
+    {title: 'Round 1 · Fix', detail: '只修 adopted + 门禁', model: 'opus'},
     {title: 'Round 2 · Dimensions', detail: '在修复产物上重定维度', model: 'opus'},
     {title: 'Round 2 · Find', detail: 'bug + 去重/简化/分层', model: 'opus'},
     {title: 'Round 2 · Verify', detail: '对抗式复核', model: 'opus'},
+    {title: 'Round 2 · Absorb', detail: '采纳 / 搁置两列', model: 'opus'},
     {title: 'Round 2 · Fix', detail: '修 + 最终门禁', model: 'opus'},
+    {title: 'Drift', detail: '意图-计划-实现是否对准', model: 'opus'},
+    {title: 'Scope', detail: '越界核实', model: 'opus'},
   ],
 }
 
 const M = {model: 'opus', effort: 'xhigh'} as const
 
-const BRIEFING = `【项目阶段】
-我们现在处于内部开发阶段，没有真实用户，没有需要保护的线上数据，没有向后兼容负担。
+// 从 references/04-agent-briefing.md 粘贴 BRIEFING 原文。不要摘要。
+const BRIEFING = `PASTE_BRIEFING_FROM_references/04-agent-briefing.md`
 
-【这意味着什么】
-任何不是最佳实践的代码实现和架构设计，都会在后面造成巨大影响。所以：
-
-- 不要为了兼容现有设计而妥协。现有代码写得不对就改它，不要在它旁边加一层适配。
-- 尽可能往最佳实践靠齐。命名、分层、依赖方向、错误处理、类型精度，都按你认为对的做。
-- 允许抽出公共部分、允许重构、允许删除。发现重复实现就合并，发现死代码就删掉。
-- 但不要过度设计。不要为了假想的扩展点加抽象层，不要为了"以后可能要换实现"加接口。
-- 不要提前过度防御。不要给不可能发生的输入加校验，不要为极端 corner case 加分支。
-  过多的防御性代码和 corner case 处理，反倒是后续架构优化的负担 —— 它让人不敢改。
-
-【判断标准】
-问自己：如果这段代码的作者三个月后要重构它，我现在写的东西是帮他还是拖累他？
-帮他的：清晰的分层、准确的类型、去掉的重复。
-拖累他的：多余的抽象、防御性分支、为兼容旧写法留的双路径。
-
-【风格】
-读周边代码再写代码。注释密度、命名习惯、惯用法都跟着现有代码走，不要引入新的库或新的模式除非确有必要。`
-
-const BASE = 'origin/main'
+// per-stage：ROUNDS=1，小档 DO_DRIFT=false；终审：ROUNDS=2。meta.phases 与实际 phase() 对齐。
+const ROUNDS = 2
+const MAX_DIMS = 6
+const DO_DRIFT = true
+const DO_SCOPE = true
+const DIFF_CMD = 'git diff <base> HEAD -- . \':(exclude).ai_docs\''
 const CHECKS = `<仓库自带 check 命令清单>`
+const REVIEW_DIR = '<.ai_docs/<slug>/review/ 绝对路径>'
+const HANDBOOK = '<手书绝对路径>'
+const SEED_LENSES = 'arch, bug'
+
+const NO_CODE = `【不要做】
+不要改业务代码。不要 git commit。不要 push。完整意见写到指定 markdown 路径，回复里只给这个路径。`
 
 const DIM_SCHEMA = {
   type: 'object',
@@ -56,23 +53,8 @@ const DIM_SCHEMA = {
 
 const FIND_SCHEMA = {
   type: 'object',
-  required: ['findings'],
-  properties: {
-    findings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['file', 'line', 'summary', 'failure_scenario', 'severity'],
-        properties: {
-          file: {type: 'string'},
-          line: {type: 'number'},
-          summary: {type: 'string'},
-          failure_scenario: {type: 'string'},
-          severity: {type: 'string', enum: ['high', 'medium', 'low']},
-        },
-      },
-    },
-  },
+  required: ['path'],
+  properties: {path: {type: 'string'}, count: {type: 'number'}},
 }
 
 const VERIFY_SCHEMA = {
@@ -83,10 +65,9 @@ const VERIFY_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['file', 'line', 'summary', 'failure_scenario', 'severity'],
+        required: ['file', 'summary', 'failure_scenario', 'severity'],
         properties: {
           file: {type: 'string'},
-          line: {type: 'number'},
           summary: {type: 'string'},
           failure_scenario: {type: 'string'},
           severity: {type: 'string', enum: ['high', 'medium', 'low']},
@@ -97,19 +78,67 @@ const VERIFY_SCHEMA = {
   },
 }
 
-async function round(n: 1 | 2) {
+const ABSORB_SCHEMA = {
+  type: 'object',
+  required: ['path', 'adopted', 'deferred'],
+  properties: {
+    path: {type: 'string'},
+    adopted: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['summary', 'how'],
+        properties: {summary: {type: 'string'}, how: {type: 'string'}, file: {type: 'string'}},
+      },
+    },
+    deferred: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['summary', 'why'],
+        properties: {summary: {type: 'string'}, why: {type: 'string'}},
+      },
+    },
+  },
+}
+
+const GATE_SCHEMA = {
+  type: 'object',
+  required: ['green', 'commands', 'unresolved'],
+  properties: {
+    green: {type: 'boolean'},
+    commands: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['cmd', 'ok'],
+        properties: {cmd: {type: 'string'}, ok: {type: 'boolean'}, tail: {type: 'string'}},
+      },
+    },
+    unresolved: {type: 'array', items: {type: 'string'}},
+  },
+}
+
+function chunk(arr, n) {
+  const out = []
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n))
+  return out
+}
+
+async function round(n: number) {
   const focus =
     n === 1
-      ? '正确性 bug、契约违背、缺失或过弱的测试。宽口径地找，先不做质量清理。'
-      : '在第一轮修复之上重新找 bug（修复本身会引入新问题），外加去重、简化、分层高度、死代码。'
+      ? '正确性 bug、契约违背、缺失或过弱的测试。宽口径地找，先不做质量清理。种子透镜：' + SEED_LENSES
+      : '在上一轮修复之上重新找 bug（修复本身会引入新问题），外加去重、简化、分层高度、死代码。'
 
   phase(`Round ${n} · Dimensions`)
-  const dims = await agent(
+  const dimsRes = await agent(
     `${BRIEFING}
 
 【你的任务】
-读 \`git diff ${BASE}...HEAD\` 的全量改动，定出本轮 review 要查的维度清单。
-维度按 diff 的实际形状来定，不要套用固定清单。每个维度给出 name / scope（具体文件或目录）/ why。
+跑 \`${DIFF_CMD}\` 读改动，定出本轮要查的维度清单。
+先纳入种子透镜（${SEED_LENSES}），再按 diff 实际形状最多补到 ${MAX_DIMS} 个。不要超过 ${MAX_DIMS}。
+每个维度给出 name / scope（具体文件或目录）/ why。
 
 【本轮关注】
 ${focus}
@@ -119,86 +148,170 @@ ${focus}
     {...M, label: `dims-r${n}`, phase: `Round ${n} · Dimensions`, schema: DIM_SCHEMA},
   )
 
+  const raw = dimsRes?.dimensions ?? []
+  const dims = raw.slice(0, MAX_DIMS)
+  if (raw.length > MAX_DIMS) log(`维度截断 ${raw.length} → ${MAX_DIMS}`)
+
   phase(`Round ${n} · Find`)
-  const found = (
+  const findFiles = (
     await parallel(
-      (dims?.dimensions ?? []).map(
+      dims.map(
         (d: any) => () =>
           agent(
             `${BRIEFING}
 
 【你的任务】
-在维度「${d.name}」上审查 \`git diff ${BASE}...HEAD\`。
-范围：${d.scope}
-为什么查这个：${d.why}
+在维度「${d.name}」上审查。范围：${d.scope}。为什么查：${d.why}
+跑 \`${DIFF_CMD}\`。对照手书 ${HANDBOOK}。
 
 【本轮关注】
 ${focus}
 
 【报告门槛】
-只报你能写出具体失效场景的问题：什么输入 / 什么状态 → 什么错误结果。
-写不出触发路径的猜测不要报。风格偏好不要报。
+只报你能写出具体失效场景的问题。写不出触发路径的猜测不要报。风格偏好不要报。
+完整意见写到 ${REVIEW_DIR}/<phase>-<scope>-r${String(n).padStart(2, '0')}-${d.name}.md
+
+${NO_CODE}
 
 【返回】
-只返回结构化 findings。`,
+只返回 {path, count}。`,
             {...M, label: `find-${d.name}`, phase: `Round ${n} · Find`, schema: FIND_SCHEMA},
           ),
       ),
     )
-  )
-    .filter(Boolean)
-    .flatMap((r: any) => r.findings ?? [])
+  ).filter(Boolean)
 
-  log(`第 ${n} 轮初筛 ${found.length} 条`)
+  log(`第 ${n} 轮 find 文件 ${findFiles.length} 份`)
 
   phase(`Round ${n} · Verify`)
-  const verified = await agent(
-    `${BRIEFING}
+  const findChunks = chunk(findFiles, 4)
+  const verifiedParts = (
+    await parallel(
+      findChunks.map(
+        (part: any, i: number) => () =>
+          agent(
+            `${BRIEFING}
 
 【你的任务】
-对抗式复核下面每一条 finding。对每条：读实际代码，尝试构造真实触发路径。
-能构造出来的保留（写清路径）；构造不出、或前提在本代码库里不可能成立的，丢弃并说明原因。
-宁缺勿滥 —— 一条假阳性的成本高于漏掉一条 low。
+先读下面这些审查文件，再对抗式复核每一条 finding。读实际代码，尝试构造真实触发路径。
+能构造出来的保留；构造不出、或前提在本代码库里不可能成立的，丢弃并说明原因。
+宁缺勿滥。
 
-【待复核】
-${JSON.stringify(found, null, 2)}
+【待复核的文件】
+${JSON.stringify(part, null, 2)}
 
 【返回】
-只返回结构化结果：confirmed（按严重度降序）+ discarded（每条一句原因）。`,
-    {...M, label: `verify-r${n}`, phase: `Round ${n} · Verify`, schema: VERIFY_SCHEMA},
-  )
+只返回结构化结果：confirmed（按严重度降序）+ discarded。`,
+            {...M, label: `verify-r${n}-${i}`, phase: `Round ${n} · Verify`, schema: VERIFY_SCHEMA},
+          ),
+      ),
+    )
+  ).filter(Boolean)
 
-  const confirmed = verified?.confirmed ?? []
+  const confirmed = verifiedParts.flatMap((r: any) => r.confirmed ?? [])
   log(`第 ${n} 轮确认 ${confirmed.length} 条`)
 
-  phase(`Round ${n} · Fix`)
-  const fixed = await agent(
+  phase(`Round ${n} · Absorb`)
+  const absorbed = await agent(
     `${BRIEFING}
 
 【你的任务】
-按严重度降序修下面这些已确认问题，然后跑门禁到全绿。
+下面是已确认 finding 原文（不要先摘要再判断）。逐条说该不该改、怎么改。
+high 必须采纳或写明搁置理由；low 默认搁置进 follow-ups。
+输出两列：采纳（含改法）、搁置（含一句理由）。
+写到 ${REVIEW_DIR}/<phase>-all-r${String(n).padStart(2, '0')}-abs.md
 
-${JSON.stringify(confirmed, null, 2)}
+${NO_CODE}
+
+【confirmed】
+${JSON.stringify(confirmed, null, 2)}`,
+    {...M, label: `abs-r${n}`, phase: `Round ${n} · Absorb`, schema: ABSORB_SCHEMA},
+  )
+
+  const adopted = absorbed?.adopted ?? []
+  phase(`Round ${n} · Fix`)
+  let gate: any = {green: true, commands: [], unresolved: []}
+  if (adopted.length > 0) {
+    gate = await agent(
+      `${BRIEFING}
+
+【你的任务】
+只修吸收清单里 adopted 的项，按严重度降序。每组相关修复打独立 fix commit，并写 runlog。
+然后跑门禁到全绿。
+
+${JSON.stringify(adopted, null, 2)}
 
 【门禁】
 ${CHECKS}
 
 【不要做】
-不要顺手做清单外的改动。不要为了让测试通过而弱化断言。
+不要顺手做清单外的改动。不要为了让测试通过而弱化断言。不要给吸收清单加条目。
 
 【提交】
 在当前分支上提交，commit message 用 \`fix(scope): subject\` 或 \`refactor(scope): subject\`。
 不要创建分支，不要 push，不要开 PR。
 
 【返回】
-你的最终文本就是返回值。返回：每条问题的处置（fixed / skipped 及原因）、commit 列表、门禁结论。`,
-    {...M, label: `fix-r${n}`, phase: `Round ${n} · Fix`},
-  )
+只返回结构化门禁结果。`,
+      {...M, label: `fix-r${n}`, phase: `Round ${n} · Fix`, schema: GATE_SCHEMA},
+    )
+  } else {
+    gate = await agent(
+      `${BRIEFING}
 
-  return {round: n, found: found.length, confirmed, fixed}
+【你的任务】
+本轮 adopted 为空。只跑门禁，不改业务代码。
+
+${CHECKS}
+
+【返回】
+只返回结构化门禁结果。`,
+      {...M, label: `gate-r${n}`, phase: `Round ${n} · Fix`, schema: GATE_SCHEMA},
+    )
+  }
+
+  return {round: n, confirmed, absorbed, gate}
 }
 
 const r1 = await round(1)
-const r2 = await round(2)
+let r2out = null
+if (ROUNDS >= 2 && r1.gate?.green) {
+  r2out = await round(2)
+} else if (ROUNDS >= 2) {
+  log('第 1 轮门禁未绿，跳过第 2 轮')
+}
 
-return {r1, r2}
+let drift = null
+if (DO_DRIFT) {
+  phase('Drift')
+  drift = await agent(
+    `${BRIEFING}
+
+【你的任务】
+读手书 ${HANDBOOK}、本 stage 计划条目、\`${DIFF_CMD}\`、本 stage runlog 与吸收文件。
+核对：原始意图 — 计划承诺 — 可观察实现。是否对准、是否原地打转、主线有没有被带跑。
+有漂移：给出下一笔唯一纠正。没有：写「对准」+ 一句证据。
+写到 ${REVIEW_DIR}/<phase>-all-r01-drift.md
+
+${NO_CODE}`,
+    {...M, label: 'drift', phase: 'Drift'},
+  )
+}
+
+let scope = null
+if (DO_SCOPE) {
+  phase('Scope')
+  scope = await agent(
+    `${BRIEFING}
+
+【你的任务】
+跑 git diff --name-only <stage_base> <stage_head>。只读该文件清单和手书 ${HANDBOOK}。
+判断这些路径是否在辐射内。该改 / 不该改各列出来，依据写在手书里，不听实现进程解释。
+写到 ${REVIEW_DIR}/<phase>-all-r01-scope.md
+
+${NO_CODE}`,
+    {...M, label: 'scope', phase: 'Scope'},
+  )
+}
+
+return {r1, r2: r2out, drift, scope}
