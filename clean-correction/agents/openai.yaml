@@ -1,0 +1,4 @@
+interface:
+  display_name: "干净纠正"
+  short_description: "落实用户最终意图，彻底清除被否定方案留下的行为、结构和解释残留。"
+  default_prompt: "使用 $clean-correction 按照我的最终要求修改交付物，并清理被否定方案留下的行为和说明。"
