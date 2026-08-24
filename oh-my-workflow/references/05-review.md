@@ -24,7 +24,9 @@
 | 每个开发 stage 结束 | 1 轮：维度以 `arch` 与 `bug` 为种子（可按 diff 再加，总数 ≤ SKILL.md 的维度上限）→ find ∥ → 对抗 verify → `abs`。中/大再做 drift。然后越界检查 |
 | 大档终审 | 上表代码审查 × 2，范围 `workflow_base_sha..HEAD`。第 1 轮门禁不绿，不开第 2 轮 |
 
-第 1 轮关注正确性 bug、契约违背、缺失测试。第 2 轮在第 1 轮修复产物上重找 bug，外加去重 / 简化 / 分层 / 死代码。
+第 1 轮关注正确性 bug、契约违背、缺失测试。第 2 轮在第 1 轮修复产物上重找 bug，外加去重 / 简化 / 分层 / 死代码；Fix 仍只许修 adopted，禁止顺手新行为。
+
+开发 stage 的审查包在 `dev-stage-workflow.template.ts` 里，`rounds` 默认 1。design / tech-design / 终审用 `review-workflow.template.ts`；终审才把 `rounds` 设为 2。不要靠改 `meta.phases` 来切换轮次。
 
 ## 只读与写入口
 
@@ -44,6 +46,19 @@ dimensions / find / verify / absorb / drift / scope：**不改业务代码、不
 
 修复若改了已审查的行为或契约：重跑受影响 lens。
 
+## 收敛（脚本执行）
+
+workflow 返回 `halt` 时编排器必须停，不准再派 fix、不准当没看见。
+
+| 条件 | `halt` |
+|------|--------|
+| 某笔实现不是 `committed` | `implement-blocked` |
+| Verify 3 轮仍不绿 | `verify-red` |
+| 还要跑下一轮，但本轮门禁不绿 | `gate-red-no-next-round` |
+| 第 n 轮（n≥2）confirmed 条数 ≥ max(上一轮 adopted 数, 1) | `finding-explosion` |
+
+`finding-explosion` 表示补丁循环在放大问题（例如修 5 个后又冒出 13 个）。升级给人，改手书或拆 PR，不要自动再修一轮。
+
 ## 吸收
 
 1. 原文齐了之后起**新** agent 跑判断吸收，输出采纳 / 搁置两列。不要先摘要再判断。
@@ -62,7 +77,7 @@ dimensions / find / verify / absorb / drift / scope：**不改业务代码、不
 
 ## 提示词块
 
-拼 prompt 时 BRIEFING 仍从 `04-agent-briefing.md` 粘贴。下面只补任务块。
+拼 prompt 时第一段是 Read `BRIEFING.md`（见模板 `READ_BRIEFING`）。下面只补任务块。
 
 **设计审查（roi）**
 

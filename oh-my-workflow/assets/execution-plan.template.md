@@ -63,13 +63,9 @@
 
 所有阶段在同一 worktree、同一分支上累积提交。实现 agent 不建分支、不 push、不开 PR。一笔一个 commit，串行，`expected_base_sha` 链到上一笔 HEAD。
 
-## 6. Agent Briefing（每个 agent prompt 必须内联此段原文）
+## 6. Agent Briefing
 
-从 `oh-my-workflow/references/04-agent-briefing.md` 把 BRIEFING 原文整段粘贴到下面。不要改写。
-
-```
-<粘贴 BRIEFING>
-```
+路径：`.ai_docs/<slug>/BRIEFING.md`（boot 从 `04-agent-briefing.md` 复制）。每个 agent 先 Read 该文件，不要把原文粘进计划或 prompt。
 
 ## 7. 整体完成判据
 

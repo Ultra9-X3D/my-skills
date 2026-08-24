@@ -13,6 +13,10 @@
 - `owned_workflows`：本 skill 起过的 workflow 名 / 返回的 task id，随开跑追加
 - 模型 / effort（与 SKILL.md 参数表一致，除非用户改过）
 
+## `BRIEFING.md`
+
+boot 时把 `04-agent-briefing.md` 的 BRIEFING 原文原样复制到 `.ai_docs/<slug>/BRIEFING.md`。workflow 的 `CONFIG.briefingPath` 指向它。不要在 prompt 里粘贴副本；改规则只改 04 再复制一次。
+
 ## `design.md`
 
 给人一行行读：

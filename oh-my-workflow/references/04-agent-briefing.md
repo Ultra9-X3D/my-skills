@@ -1,6 +1,6 @@
-# Agent Briefing（强制内联）
+# Agent Briefing
 
-下面 BRIEFING 是**每个 agent prompt 的第一段，逐字内联，不改写、不摘要、不用「见上文」替代**。子 agent 不继承主会话上下文。原文只在本文件维护；填模板和写执行计划时从这里粘贴。
+原文只在本文件维护。boot 时复制到 worktree 内 `.ai_docs/<slug>/BRIEFING.md`。每个 agent **先 Read 那份文件**，不粘贴、不摘要、不用「见上文」替代。子 agent 不继承主会话上下文，不读文件等于没说过。
 
 ## BRIEFING（原文）
 
@@ -28,7 +28,7 @@
 只做手书和本笔任务允许的路径。发现手书与代码现状冲突：status=blocked-conflict，不要 commit，也不要擅自改手书。
 ```
 
-## 除 briefing 之外，每个 agent prompt 还必须带
+## 每个 agent prompt 在 Read 之后还必须带
 
 1. **本 agent 的具体任务** — 目标 + 触达范围 + 明确的不做什么。
 2. **需要的现状事实** — 已知的文件路径与结论。
@@ -36,31 +36,9 @@
 4. **提交要求** — 实现 agent 才提交；审查 agent 写「不要改业务代码，不要 commit」。
 5. **返回什么** — 「你的最终文本就是返回值」，要结构化事实，不要寒暄。
 
-## 模板
+模板里这段已经写死，不要改成粘贴原文：
 
 ```ts
-const BRIEFING = `（此处必须是上面 BRIEFING 的完整原文）`
-
-const prompt = `${BRIEFING}
-
-【你的任务】
-…
-
-【现状（已确认，无需重新探索）】
-…
-
-【不要做】
-…
-
-【完成判据】
-…
-
-【提交】
-在当前 worktree 的当前分支上提交，commit message 用 \`type(scope): subject\`。
-测试与被测代码放同一个 commit。不要创建分支，不要 push，不要开 PR。
-（审查类 agent 把本段换成：不要改业务代码，不要 git commit，不要 push。）
-
-【返回】
-你的最终文本就是返回值。返回：改动的文件清单、每条 commit 的 sha 与 subject、
-判据命令的实际输出结论、以及任何你没能解决的问题（明确说清，不要粉饰）。`
+const READ_BRIEFING = `【必做第一件事】
+Read ${CONFIG.briefingPath}。遵守其中 BRIEFING 原文，不摘要、不改写。读完再做下面的任务。`
 ```

@@ -13,14 +13,14 @@
 
 | 情况 | 做法 |
 | --- | --- |
-| 门禁全绿 | 直接推进下一阶段，不用问 |
-| 少量测试失败、原因清楚 | 派一个 fix agent 修（独立 commit + runlog），然后重跑门禁 |
-| 同一处失败修了 2 次还在 | 停止增量微调。诊断根因，换一条路，说清换了什么 |
+| `halt` 为空且 `converged=true` | 推进下一阶段，不用问 |
+| `halt=finding-explosion` | 停。把两轮 finding 摊给用户。禁止再派 fix |
+| `halt=implement-blocked` / `verify-red` / `gate-red-no-next-round` | 停。按返回值升级。脚本内已修过门禁，编排器不要另开一轮「再试试」 |
 | agent 报告与实际 git 状态不符 | 信 git |
 | 需要偏离已认可的阶段划分（扩或缩） | 停下来等用户（attended）或升级（unattended） |
 | 需要破坏性操作（删多文件、force push、改 CI/生产配置） | 停下来等用户 |
-| 阶段范围明显估错、装不进单 agent 预算 | 拆 commit 重跑该笔，不要加 stage（估法见 02） |
-| 审查 agent 失败 / 被跳过 / 产物文件缺失 | 记 follow-up，不要用编排者文字填空，不要假装审过 |
+| 阶段范围明显估错、装不进单 agent 预算 | 拆 commit 写进 CONFIG 后重跑该 stage 脚本，不要加 stage |
+| 审查产物文件缺失 | 记 follow-up，不要用编排者文字填空 |
 
 ## 编排者禁区
 
@@ -35,6 +35,7 @@
 - 门禁在换过路子之后仍然不绿。
 - 需要破坏性或对外操作。
 - 走读依赖缺失，PR 开不了。
+- workflow 返回 `halt`（含 `finding-explosion`）。
 - 全部完成、PR 已开。
 
 不要为常规进度发通知。

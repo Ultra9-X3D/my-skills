@@ -74,6 +74,6 @@
 
 ## 执行计划
 
-用 `assets/execution-plan.template.md`。必备：背景与非目标、已读代码事实、总体设计与决策、阶段拆分（含 `plan_item_id` 与允许路径）、执行方式、从 `04-agent-briefing.md` 粘贴的 BRIEFING 原文、整体完成判据、风险与假设。
+用 `assets/execution-plan.template.md`。必备：背景与非目标、已读代码事实、总体设计与决策、阶段拆分（含 `plan_item_id` 与允许路径）、执行方式、`BRIEFING.md` 路径、整体完成判据、风险与假设。不要把 briefing 原文再抄进计划。
 
 简体中文散文；路径 / 标识符 / 命令保持英文。判据是能粘进终端的命令。
