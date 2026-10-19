@@ -1,0 +1,4 @@
+interface:
+  display_name: "课程笔记更新与同步"
+  short_description: "在正确的 iCloud 课程库中润色笔记、转写截图公式并核对保存结果"
+  default_prompt: "使用 $course-notes-sync 更新当前课程笔记，将截图中的文字和公式转写并保存到 iCloud 课程库。"
